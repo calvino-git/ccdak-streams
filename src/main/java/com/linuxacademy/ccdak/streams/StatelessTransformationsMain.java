@@ -33,6 +33,7 @@ public class StatelessTransformationsMain {
         //Split into 2 streams
         Predicate<String, String> p1 = (key, value) -> value.charAt(0) > 'A';
         Predicate<String, String> p2 = (key, value) -> true;
+        @SuppressWarnings("unchecked")
         KStream<String,String>[] branches = kStream.branch(p1, p2);
         KStream<String,String> multiOf10Stream = branches[0];
         KStream<String,String> otherStream = branches[1];
