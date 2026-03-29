@@ -1,12 +1,18 @@
 package com.linuxacademy.ccdak.streams;
 
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
+
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.Predicate;
 
 public class StatelessTransformationsMain {
 
@@ -22,11 +28,34 @@ public class StatelessTransformationsMain {
 
         // Get the source stream.
         final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> kStream = builder.stream("stateless-transformation-input-topic");
         
-        //Implement streams logic.
+        //Split into 2 streams
+        Predicate<String, String> p1 = (key, value) -> value.charAt(0) > 'A';
+        Predicate<String, String> p2 = (key, value) -> true;
+        KStream<String,String>[] branches = kStream.branch(p1, p2);
+        KStream<String,String> multiOf10Stream = branches[0];
+        KStream<String,String> otherStream = branches[1];
+
+        KStream<String,String> fullStream = multiOf10Stream.filter((key, value) -> true)
+        .flatMap((key, value) -> {
+            List<KeyValue<String, String>> result = new LinkedList<>();
+            result.add(KeyValue.pair(key, value + ":" + String.valueOf((char) Integer.valueOf(key).intValue()).toLowerCase()));
+            result.add(KeyValue.pair(key, value + ":" + String.valueOf((char) Integer.valueOf(key).intValue()).toLowerCase()));
+            return result;
+        })
+        .map((key, value) -> KeyValue.pair(key, value))
+        .merge(otherStream);
         
+        //multiOf10Stream.peek((key, value) -> System.out.println(key + ":" + value));
+
+        fullStream.peek((key, value) -> System.out.println(key + ":" + value));
+
+        fullStream.to("stateless-transformation-output-topic");
+
         final Topology topology = builder.build();
         final KafkaStreams streams = new KafkaStreams(topology, props);
+
         // Print the topology to the console.
         System.out.println(topology.describe());
         final CountDownLatch latch = new CountDownLatch(1);
